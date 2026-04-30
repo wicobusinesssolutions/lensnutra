@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1.00001,viewport-fit=cover" />
+    <script>
+      // FlexBuild error bridge — runs BEFORE Metro bundle loads.
+      // Metro catches module-load errors (e.g. TurboModuleRegistry.getEnforcing crashes)
+      // internally via guardedLoadModule, bypassing window.onerror. This script intercepts
+      // ErrorUtils the moment Metro sets it, so every fatal error is forwarded to the chat.
+      (function () {
+        var reported = new Set();
+        function send(name, message, stack, type) {
+          var key = (message || '') + (stack || '');
+          if (reported.has(key)) return;
+          reported.add(key);
+          try {
+            window.parent.postMessage({
+              type: 'flexbuild-preview-error',
+              error: {
+                type: type || 'runtime',
+                title: name || 'Error',
+                message: message || 'Unknown error',
+                stack: stack || '',
+                location: '',
+                timestamp: new Date().toISOString(),
+                suggestions: [
+                  'Check the error message and stack trace',
+                  'Verify babel.config.js includes react-native-reanimated/plugin as last plugin',
+                  'Ensure GestureHandlerRootView wraps the root layout when using gesture-handler',
+                  'Review all imports and package versions',
+                ],
+              },
+            }, '*');
+          } catch (_) {}
+        }
+
+        // 1. Browser-level errors (catches anything that escapes Metro try/catch)
+        window.addEventListener('error', function (e) {
+          if (e.error) send(e.error.name, e.error.message, e.error.stack || '', 'runtime');
+        });
+        window.addEventListener('unhandledrejection', function (e) {
+          var v = e.reason;
+          if (v instanceof Error) send(v.name, v.message, v.stack || '', 'promise');
+          else send('UnhandledRejection', String(v), '', 'promise');
+        });
+
+        // 2. Intercept ErrorUtils via Object.defineProperty.
+        // When Metro polyfills run: global.ErrorUtils = { setGlobalHandler, ... }
+        // Our setter fires immediately and wraps setGlobalHandler so every fatal
+        // error (including getEnforcing/TurboModuleRegistry crashes) reaches chat.
+        var _ErrorUtils;
+        try {
+          Object.defineProperty(globalThis, 'ErrorUtils', {
+            get: function () { return _ErrorUtils; },
+            set: function (val) {
+              _ErrorUtils = val;
+              if (!val || !val.setGlobalHandler) return;
+              var prev = null;
+              try { prev = val.getGlobalHandler && val.getGlobalHandler(); } catch (_) {}
+              try {
+                val.setGlobalHandler(function (error, isFatal) {
+                  try {
+                    var err = error instanceof Error ? error : new Error(String(error));
+                    send(err.name, err.message, err.stack || '', isFatal ? 'fatal' : 'runtime');
+                  } catch (_) {}
+                  if (prev) try { prev(error, isFatal); } catch (_) {}
+                });
+              } catch (_) {}
+            },
+            configurable: true,
+          });
+        } catch (_) {}
+
+        // 3. MutationObserver — backup: watches for Metro's LogBox red overlay in DOM.
+        // LogBox renders as a React Native View (div) when React's error boundary fires.
+        document.addEventListener('DOMContentLoaded', function () {
+          var observer = new MutationObserver(function () {
+            var body = document.body;
+            if (!body) return;
+            var text = body.innerText || '';
+            if (
+              text.includes('Uncaught Error') ||
+              text.includes('getEnforcing') ||
+              body.querySelector('[data-testid="LogBox"]') ||
+              body.querySelector('[aria-label="LogBox"]')
+            ) {
+              var lines = text.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+              var idx = lines.indexOf('Uncaught Error');
+              var message = idx >= 0 ? lines[idx + 1] : (lines[0] || 'Metro runtime error');
+              send('RuntimeError', message, text.slice(0, 1000), 'runtime');
+            }
+          });
+          if (document.body) observer.observe(document.body, { childList: true, subtree: true });
+        });
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
