@@ -26,6 +26,7 @@ export default function ProfileEditScreen() {
   // Local state for form fields
   const [name, setName] = useState(profile.name);
   const [email, setEmail] = useState(profile.email);
+  const [weightUnit, setWeightUnit] = useState(profile.weightUnit || 'lbs');
   
   // Source of truth is Metric (kg/cm)
   const [weightKg, setWeightKg] = useState(profile.weightKg);
@@ -86,7 +87,10 @@ export default function ProfileEditScreen() {
   useEffect(() => {
     setWeightLbs(kgToLbs(profile.weightKg));
     setHeightFt(cmToFt(profile.heightCm));
-  }, []);
+    if (profile.weightUnit) {
+      setWeightUnit(profile.weightUnit);
+    }
+  }, [profile.weightKg, profile.heightCm, profile.weightUnit]);
 
   const handleSave = () => {
     setIsSaving(true);
@@ -97,6 +101,7 @@ export default function ProfileEditScreen() {
       email,
       weightKg,
       heightCm,
+      weightUnit: weightUnit as 'kg' | 'lbs',
     });
 
     setTimeout(() => {
@@ -149,8 +154,24 @@ export default function ProfileEditScreen() {
 
             <View style={styles.sectionHeader}>
               <Scale size={18} color={colors.text} />
-              <Text style={[styles.sectionLabel, { color: colors.text }]}>Weight</Text>
+              <Text style={[styles.sectionLabel, { color: colors.text }]}>Weight & Preferred Unit</Text>
             </View>
+            
+            <View style={[styles.unitToggleContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <TouchableOpacity 
+                style={[styles.unitToggle, weightUnit === 'kg' && { backgroundColor: colors.primary }]}
+                onPress={() => setWeightUnit('kg')}
+              >
+                <Text style={[styles.unitToggleText, { color: weightUnit === 'kg' ? '#FFF' : colors.textSecondary }]}>Kilograms (kg)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.unitToggle, weightUnit === 'lbs' && { backgroundColor: colors.primary }]}
+                onPress={() => setWeightUnit('lbs')}
+              >
+                <Text style={[styles.unitToggleText, { color: weightUnit === 'lbs' ? '#FFF' : colors.textSecondary }]}>Pounds (lbs)</Text>
+              </TouchableOpacity>
+            </View>
+
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
                 <InputField 
@@ -161,6 +182,7 @@ export default function ProfileEditScreen() {
                   icon={Scale}
                   unit="kg"
                   colors={colors}
+                  active={weightUnit === 'kg'}
                 />
               </View>
               <View style={{ width: 12 }} />
@@ -173,6 +195,7 @@ export default function ProfileEditScreen() {
                   icon={Scale}
                   unit="lbs"
                   colors={colors}
+                  active={weightUnit === 'lbs'}
                 />
               </View>
             </View>
@@ -236,12 +259,16 @@ export default function ProfileEditScreen() {
   );
 }
 
-const InputField = ({ label, value, onChangeText, placeholder, keyboardType, icon: Icon, unit, colors }: any) => (
+const InputField = ({ label, value, onChangeText, placeholder, keyboardType, icon: Icon, unit, colors, active }: any) => (
   <View style={styles.inputContainer}>
     {label && <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>}
-    <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={[
+      styles.inputWrapper, 
+      { backgroundColor: colors.card, borderColor: active ? colors.primary : colors.border },
+      active && { borderWidth: 2 }
+    ]}>
       <View style={styles.inputIcon}>
-        <Icon size={20} color={colors.textSecondary} />
+        <Icon size={20} color={active ? colors.primary : colors.textSecondary} />
       </View>
       <TextInput
         style={[styles.input, { color: colors.text }]}
@@ -255,7 +282,7 @@ const InputField = ({ label, value, onChangeText, placeholder, keyboardType, ico
         spellCheck={false}
         textContentType="none"
       />
-      {unit && <Text style={[styles.unitText, { color: colors.textSecondary }]}>{unit}</Text>}
+      {unit && <Text style={[styles.unitText, { color: active ? colors.primary : colors.textSecondary }]}>{unit}</Text>}
     </View>
   </View>
 );
@@ -332,6 +359,24 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: 15,
+    fontWeight: '700',
+  },
+  unitToggleContainer: {
+    flexDirection: 'row',
+    height: 48,
+    borderRadius: 14,
+    padding: 4,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  unitToggle: {
+    flex: 1,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  unitToggleText: {
+    fontSize: 14,
     fontWeight: '700',
   },
   infoBox: {

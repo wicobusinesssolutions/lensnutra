@@ -1,10 +1,12 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Dimensions, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Dimensions, Alert, ActivityIndicator, Modal, Pressable, ScrollView, Image } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { X, Zap, HelpCircle, Image as ImageIcon, Barcode, List, Apple } from 'lucide-react-native';
+import { X, Zap, HelpCircle, Image as ImageIcon, Barcode, List, Info, Camera, ScanText } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
 import axios from 'axios';
+import * as FileSystem from 'expo-file-system/legacy';
 
 const { width, height } = Dimensions.get('window');
 
@@ -14,6 +16,7 @@ export default function CameraScreen() {
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState('Scan Food');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isHelpVisible, setIsHelpVisible] = useState(false);
   const cameraRef = useRef<CameraView>(null);
 
   if (!permission) return <View />;
@@ -31,17 +34,19 @@ export default function CameraScreen() {
   const handleCapture = async () => {
     if (!cameraRef.current || isAnalyzing) return;
 
-    if (!process.env.EXPO_PUBLIC_OPENROUTER_API_KEY || process.env.EXPO_PUBLIC_OPENROUTER_API_KEY === 'your_api_key_here') {
+    let photo: any = null;
+
+    if (!process.env.EXPO_PUBLIC_OPENROUTER_API_KEY || process.env.EXPO_PUBLIC_OPENROUTER_API_KEY.includes('your_api_key')) {
       Alert.alert(
-        'Configuration Required',
-        'Please add your OpenRouter API key to the .env file as EXPO_PUBLIC_OPENROUTER_API_KEY.'
+        'API Key Missing',
+        'Please ensure EXPO_PUBLIC_OPENROUTER_API_KEY is set correctly in your .env file.'
       );
       return;
     }
 
     try {
       setIsAnalyzing(true);
-      const photo = await cameraRef.current.takePictureAsync({
+      photo = await cameraRef.current.takePictureAsync({
         base64: true,
         quality: 0.5,
       });
@@ -49,6 +54,18 @@ export default function CameraScreen() {
       if (!photo?.base64) {
         throw new Error('Failed to capture image data');
       }
+
+      // Move to permanent storage immediately
+      const filename = `meal_${Date.now()}.jpg`;
+      const persistentUri = `${FileSystem.documentDirectory}${filename}`;
+      await FileSystem.copyAsync({
+        from: photo.uri,
+        to: persistentUri,
+      });
+
+      const prompt = mode === 'Food Label' 
+        ? 'Analyze this nutrition facts table image. Extract the data with high precision. Return a JSON object with: isFood (true), mealName (the brand or product name found on the label, e.g., "Oat Milk"), calories (number), protein (number), carbs (number), fat (number), antioxidants (null), description (a summary of the nutritional profile), healthBenefits (an analysis of the ingredients/additives found on the label), and ingredients (empty array []). Ensure you extract "Serving Size" information and include it in the description. If the label is vertical or horizontal, rotate your analysis accordingly.'
+        : 'Analyze this image. Return a JSON object with: isFood (boolean), mealName (string), calories (number), protein (number), carbs (number), fat (number), antioxidants (string), description (string), healthBenefits (string - explain why the specific nutrients in this meal are good for the user, e.g., "High in Vitamin C which boosts immunity and collagen production"), and ingredients (array of {name, calories, portion, x, y}). The x and y values must be integers from 0-100 representing the percentage position of that specific ingredient in the image. If no food or beverage is detected, set isFood to false.';
 
       const response = await axios.post(
         'https://openrouter.ai/api/v1/chat/completions',
@@ -60,7 +77,7 @@ export default function CameraScreen() {
               content: [
                 {
                   type: 'text',
-                  text: 'Analyze this image. Return a JSON object with: isFood (boolean), mealName (string), calories (number), protein (number), carbs (number), fat (number), antioxidants (string), description (string), healthBenefits (string - explain why the specific nutrients in this meal are good for the user, e.g., "High in Vitamin C which boosts immunity and collagen production"), and ingredients (array of {name, calories, portion, x, y}). The x and y values must be integers from 0-100 representing the percentage position of that specific ingredient in the image. If no food or beverage is detected, set isFood to false.',
+                  text: prompt,
                 },
                 {
                   type: 'image_url',
@@ -83,22 +100,61 @@ export default function CameraScreen() {
 
       const result = JSON.parse(response.data.choices[0].message.content);
 
-      if (!result.isFood) {
-        Alert.alert('No food detected', 'Please try taking a clearer photo of your meal.');
-        setIsAnalyzing(false);
-        return;
-      }
-
+      // Navigate even if not food, allowing manual entry
       router.push({
         pathname: '/nutrition-detail',
         params: { 
           analysis: JSON.stringify(result),
-          imageUri: photo.uri 
+          imageUri: persistentUri,
+          isManual: (!result.isFood).toString()
         },
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('AI Analysis Error:', error);
-      Alert.alert('Analysis Failed', 'There was an error analyzing your meal. Please try again.');
+
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        if (status === 401) {
+          Alert.alert(
+            'Invalid API Key',
+            'The OpenRouter API key (401 Unauthorized) was rejected. Please verify the key in your .env file.'
+          );
+          setIsAnalyzing(false);
+          return;
+        }
+        
+        if (error.response?.status === 429) {
+          Alert.alert(
+            'Rate Limit Exceeded',
+            'Too many requests. Please wait a moment before trying again.'
+          );
+          setIsAnalyzing(false);
+          return;
+        }
+      }
+
+      // Fallback to manual entry on error
+      const fallbackResult = {
+        isFood: false,
+        mealName: 'Unrecognized Meal',
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        antioxidants: '',
+        description: 'AI could not analyze this image. Please enter details manually.',
+        healthBenefits: '',
+        ingredients: []
+      };
+      
+      router.push({
+              pathname: '/nutrition-detail',
+              params: { 
+                analysis: JSON.stringify(fallbackResult),
+                imageUri: photo?.uri || '', // Use temp URI if persistent failed, or empty string if capture failed
+                isManual: 'true'
+              },
+            });
     } finally {
       setIsAnalyzing(false);
     }
@@ -114,17 +170,28 @@ export default function CameraScreen() {
               <X color="#FFF" size={24} />
             </TouchableOpacity>
             <View style={styles.logoContainer}>
-              <Apple color="#FFF" size={20} fill="#FFF" />
-              <Text style={styles.logoText}>LensNutra AI</Text>
+              <Image 
+                source={require('../assets/images/icon.png')} 
+                style={{ width: 24, height: 24, borderRadius: 6 }} 
+                resizeMode="contain"
+              />
+              <Text style={styles.logoText}>LensNutra</Text>
             </View>
-            <TouchableOpacity style={styles.iconButton}>
+            <TouchableOpacity 
+              style={styles.iconButton}
+              onPress={() => setIsHelpVisible(true)}
+            >
               <HelpCircle color="#FFF" size={24} />
             </TouchableOpacity>
           </View>
 
           {/* Bottom Controls */}
           <View style={[styles.bottomControls, { paddingBottom: insets.bottom + 20 }]}>
-            <View style={styles.modeSelector}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              contentContainerStyle={styles.modeSelectorScroll}
+            >
               {['Scan Food', 'Barcode', 'Food Label', 'Library'].map((m) => (
                 <TouchableOpacity 
                   key={m} 
@@ -133,7 +200,7 @@ export default function CameraScreen() {
                   <Text style={[styles.modeText, mode === m && styles.modeTextActive]}>{m}</Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
 
             <View style={styles.shutterRow}>
               <TouchableOpacity style={styles.sideButton}>
@@ -158,6 +225,77 @@ export default function CameraScreen() {
           </View>
         </View>
       </CameraView>
+
+      {/* Help Modal */}
+      <Modal
+        visible={isHelpVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsHelpVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setIsHelpVisible(false)} />
+          
+          <View style={styles.helpCard}>
+            <View style={styles.helpHeader}>
+              <View style={styles.helpIconBg}>
+                <Info color="#007AFF" size={24} />
+              </View>
+              <Text style={styles.helpTitle}>Camera Features</Text>
+            </View>
+
+            <View style={styles.helpList}>
+              <View style={styles.helpItem}>
+                <View style={[styles.helpItemIcon, { backgroundColor: 'rgba(52, 199, 89, 0.15)' }]}>
+                  <Camera color="#34C759" size={20} />
+                </View>
+                <View style={styles.helpItemContent}>
+                  <Text style={styles.helpItemTitle}>Scan Food</Text>
+                  <Text style={styles.helpItemDesc}>Identify meals, estimate portions, and get instant nutritional breakdowns.</Text>
+                </View>
+              </View>
+
+              <View style={styles.helpItem}>
+                <View style={[styles.helpItemIcon, { backgroundColor: 'rgba(0, 122, 255, 0.15)' }]}>
+                  <Barcode color="#007AFF" size={20} />
+                </View>
+                <View style={styles.helpItemContent}>
+                  <Text style={styles.helpItemTitle}>Barcode</Text>
+                  <Text style={styles.helpItemDesc}>Quickly lookup branded products and packaged items by scanning their barcode.</Text>
+                </View>
+              </View>
+
+              <View style={styles.helpItem}>
+                <View style={[styles.helpItemIcon, { backgroundColor: 'rgba(255, 149, 0, 0.15)' }]}>
+                  <ScanText color="#FF9500" size={20} />
+                </View>
+                <View style={styles.helpItemContent}>
+                  <Text style={styles.helpItemTitle}>Food Label</Text>
+                  <Text style={styles.helpItemDesc}>Extract precise data from nutrition tables on the back of food packaging.</Text>
+                </View>
+              </View>
+
+              <View style={styles.helpItem}>
+                <View style={[styles.helpItemIcon, { backgroundColor: 'rgba(175, 82, 222, 0.15)' }]}>
+                  <ImageIcon color="#AF52DE" size={20} />
+                </View>
+                <View style={styles.helpItemContent}>
+                  <Text style={styles.helpItemTitle}>Library</Text>
+                  <Text style={styles.helpItemDesc}>Upload a photo from your gallery to analyze meals you've already captured.</Text>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.helpCloseBtn}
+              onPress={() => setIsHelpVisible(false)}
+            >
+              <Text style={styles.helpCloseBtnText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -202,11 +340,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
     paddingTop: 20,
   },
-  modeSelector: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+  modeSelectorScroll: {
+    paddingHorizontal: 40,
     gap: 20,
     marginBottom: 30,
+    alignItems: 'center',
   },
   modeItem: {
     paddingVertical: 6,
@@ -273,5 +411,89 @@ const styles = StyleSheet.create({
   permissionButtonText: {
     color: '#FFF',
     fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  helpCard: {
+    width: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 32,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  helpHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 24,
+  },
+  helpIconBg: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  helpTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#000',
+    letterSpacing: -0.5,
+  },
+  helpList: {
+    gap: 20,
+    marginBottom: 32,
+  },
+  helpItem: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  helpItemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  helpItemContent: {
+    flex: 1,
+  },
+  helpItemTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 2,
+  },
+  helpItemDesc: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+  helpCloseBtn: {
+    backgroundColor: '#007AFF',
+    height: 56,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  helpCloseBtnText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

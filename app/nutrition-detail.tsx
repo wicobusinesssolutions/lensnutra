@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, Platform, Share, Alert, Modal, Pressable } from 'react-native';
-import { ChevronLeft, Share2, MoreHorizontal, Flame, Plus, Minus, Bookmark, Sparkles, Info, Trash2, X } from 'lucide-react-native';
+import React, { useMemo, useState, useEffect } from 'react';
+import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, Platform, Share, Alert, Modal, Pressable, TextInput, KeyboardAvoidingView } from 'react-native';
+import { ChevronLeft, Share2, MoreHorizontal, Flame, Plus, Minus, Bookmark, Sparkles, Info, Trash2, X, ScanText, Edit2, Check } from 'lucide-react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMealStore, Meal } from '@/store/mealStore';
+import * as FileSystem from 'expo-file-system/legacy';
 
 interface Ingredient {
   name: string;
@@ -31,12 +32,13 @@ export default function NutritionDetailScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   
-  const { analysis, imageUri } = params;
-  const addMeal = useMealStore((state) => state.addMeal);
-  const deleteMeal = useMealStore((state) => state.deleteMeal);
-  const [isMenuVisible, setIsMenuVisible] = useState(false);
+  const { analysis, imageUri, isManual } = params;
+    const addMeal = useMealStore((state) => state.addMeal);
+    const deleteMeal = useMealStore((state) => state.deleteMeal);
+    const [isMenuVisible, setIsMenuVisible] = useState(false);
+  const [isEditing, setIsEditing] = useState(isManual === 'true');
 
-  const mealData = useMemo(() => {
+  const initialMealData = useMemo(() => {
     if (!analysis) return null;
     try {
       return JSON.parse(analysis as string) as MealAnalysis;
@@ -46,7 +48,13 @@ export default function NutritionDetailScreen() {
     }
   }, [analysis]);
 
-  if (!mealData) {
+  const [editableMeal, setEditableMeal] = useState<MealAnalysis | null>(initialMealData);
+
+  useEffect(() => {
+    if (initialMealData) setEditableMeal(initialMealData);
+  }, [initialMealData]);
+
+  if (!editableMeal) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={{ color: '#FFF' }}>No analysis data found.</Text>
@@ -66,8 +74,18 @@ export default function NutritionDetailScreen() {
           style={styles.heroImage} 
         />
         
+        {/* Nutrition Label Badge */}
+        {editableMeal && editableMeal.ingredients.length === 0 && editableMeal.isFood && (
+          <View style={[styles.imageLabel, { top: '10%', left: '50%', transform: [{ translateX: -75 }] }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <ScanText color="#007AFF" size={16} />
+              <Text style={styles.imageLabelText}>Nutrition Label Detected</Text>
+            </View>
+          </View>
+        )}
+
         {/* Ingredient Labels Overlay - Only render if AI provided coordinates */}
-        {mealData.ingredients
+        {editableMeal.ingredients
           .filter(ing => typeof ing.x === 'number' && typeof ing.y === 'number')
           .map((ingredient, index) => {
             // Determine if label should be above or below the point to avoid edge clipping
@@ -110,10 +128,15 @@ export default function NutritionDetailScreen() {
           </TouchableOpacity>
           <View style={styles.headerRight}>
             <TouchableOpacity 
+              onPress={() => setIsEditing(!isEditing)}
+              style={[styles.headerButton, isEditing && { backgroundColor: '#007AFF' }]}>
+              {isEditing ? <Check color="#FFF" size={20} /> : <Edit2 color="#FFF" size={20} />}
+            </TouchableOpacity>
+            <TouchableOpacity 
               onPress={async () => {
                 try {
                   await Share.share({
-                    message: `Check out my meal: ${mealData.mealName}\nCalories: ${mealData.calories}\nMacros: P:${mealData.protein}g, C:${mealData.carbs}g, F:${mealData.fat}g\n\nAnalyzed with LensNutra AI`,
+                    message: `Check out my meal: ${editableMeal.mealName}\nCalories: ${editableMeal.calories}\nMacros: P:${editableMeal.protein}g, C:${editableMeal.carbs}g, F:${editableMeal.fat}g\n\nAnalyzed with LensNutra AI`,
                   });
                 } catch (error) {
                   console.error(error);
@@ -144,27 +167,25 @@ export default function NutritionDetailScreen() {
             <View style={[styles.menuContent, { top: insets.top + 60 }]}>
               <TouchableOpacity 
                 style={styles.menuItem}
-                onPress={() => {
-                  setIsMenuVisible(false);
-                  Alert.alert(
-                    "Delete Meal",
-                    "Are you sure you want to remove this meal from your history?",
-                    [
-                      { text: "Cancel", style: "cancel" },
-                      { 
-                        text: "Delete", 
-                        style: "destructive",
-                        onPress: () => {
-                          // If the meal has an ID (it's from history), delete it
-                          // If it's a new scan, just go back
-                          const id = (params.id as string) || (JSON.parse(analysis as string).id);
-                          if (id) deleteMeal(id);
-                          router.replace('/(tabs)');
-                        }
-                      }
-                    ]
-                  );
-                }}
+              onPress={() => {
+                                setIsMenuVisible(false);
+                                Alert.alert(
+                                  "Delete Meal",
+                                  "Are you sure you want to remove this meal from your history?",
+                                  [
+                                    { text: "Cancel", style: "cancel" },
+                                    { 
+                                      text: "Delete", 
+                                      style: "destructive",
+                                      onPress: () => {
+                                        const id = (params.id as string) || (editableMeal ? (editableMeal as any).id : null);
+                                        if (id) deleteMeal(id);
+                                        router.replace('/(tabs)');
+                                      }
+                                    }
+                                  ]
+                                );
+                              }}
               >
                 <Trash2 color="#FF3B30" size={20} />
                 <Text style={styles.menuItemTextRed}>Delete Meal</Text>
@@ -183,16 +204,34 @@ export default function NutritionDetailScreen() {
       </View>
 
       {/* Content Sheet */}
-      <View style={styles.sheet}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.sheet}
+      >
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}>
           <View style={styles.sheetHeader}>
             <View style={styles.timeRow}>
               <Bookmark color="#000" size={16} fill="#000" />
-              <Text style={styles.timeText}>6:21 PM</Text>
+              <Text style={styles.timeText}>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+              {isManual === 'true' && (
+                <View style={styles.manualBadge}>
+                  <Text style={styles.manualBadgeText}>Manual Entry</Text>
+                </View>
+              )}
             </View>
             
             <View style={styles.titleRow}>
-              <Text style={styles.mealTitle}>{mealData.mealName}</Text>
+              {isEditing ? (
+                <TextInput
+                  style={[styles.mealTitle, styles.editableInput]}
+                  value={editableMeal.mealName}
+                  onChangeText={(text) => setEditableMeal({ ...editableMeal, mealName: text })}
+                  placeholder="Meal Name"
+                  autoFocus={isManual === 'true'}
+                />
+              ) : (
+                <Text style={styles.mealTitle}>{editableMeal.mealName}</Text>
+              )}
               <View style={styles.stepper}>
                 <TouchableOpacity style={styles.stepButton}>
                   <Minus color="#000" size={16} />
@@ -210,7 +249,16 @@ export default function NutritionDetailScreen() {
                 <Flame color="#000" size={20} fill="#000" />
                 <View style={styles.calorieBadgeText}>
                   <Text style={styles.calorieLabel}>Calories</Text>
-                  <Text style={styles.calorieValue}>{mealData.calories}</Text>
+                  {isEditing ? (
+                    <TextInput
+                      style={[styles.calorieValue, styles.editableInput, { minWidth: 80 }]}
+                      value={editableMeal.calories.toString()}
+                      onChangeText={(text) => setEditableMeal({ ...editableMeal, calories: parseInt(text) || 0 })}
+                      keyboardType="numeric"
+                    />
+                  ) : (
+                    <Text style={styles.calorieValue}>{editableMeal.calories}</Text>
+                  )}
                 </View>
               </View>
             </View>
@@ -221,21 +269,48 @@ export default function NutritionDetailScreen() {
                 <Text style={styles.macroIcon}>🥩</Text>
                 <View>
                   <Text style={styles.macroName}>Protein</Text>
-                  <Text style={styles.macroAmount}>{mealData.protein}g</Text>
+                  {isEditing ? (
+                    <TextInput
+                      style={[styles.macroAmount, styles.editableInput]}
+                      value={editableMeal.protein.toString()}
+                      onChangeText={(text) => setEditableMeal({ ...editableMeal, protein: parseInt(text) || 0 })}
+                      keyboardType="numeric"
+                    />
+                  ) : (
+                    <Text style={styles.macroAmount}>{editableMeal.protein}g</Text>
+                  )}
                 </View>
               </View>
               <View style={styles.macroItem}>
                 <Text style={styles.macroIcon}>🌾</Text>
                 <View>
                   <Text style={styles.macroName}>Carbs</Text>
-                  <Text style={styles.macroAmount}>{mealData.carbs}g</Text>
+                  {isEditing ? (
+                    <TextInput
+                      style={[styles.macroAmount, styles.editableInput]}
+                      value={editableMeal.carbs.toString()}
+                      onChangeText={(text) => setEditableMeal({ ...editableMeal, carbs: parseInt(text) || 0 })}
+                      keyboardType="numeric"
+                    />
+                  ) : (
+                    <Text style={styles.macroAmount}>{editableMeal.carbs}g</Text>
+                  )}
                 </View>
               </View>
               <View style={styles.macroItem}>
                 <Text style={styles.macroIcon}>🥑</Text>
                 <View>
                   <Text style={styles.macroName}>Fats</Text>
-                  <Text style={styles.macroAmount}>{mealData.fat}g</Text>
+                  {isEditing ? (
+                    <TextInput
+                      style={[styles.macroAmount, styles.editableInput]}
+                      value={editableMeal.fat.toString()}
+                      onChangeText={(text) => setEditableMeal({ ...editableMeal, fat: parseInt(text) || 0 })}
+                      keyboardType="numeric"
+                    />
+                  ) : (
+                    <Text style={styles.macroAmount}>{editableMeal.fat}g</Text>
+                  )}
                 </View>
               </View>
             </View>
@@ -244,21 +319,31 @@ export default function NutritionDetailScreen() {
             <View style={styles.aiSection}>
               <View style={styles.aiHeader}>
                 <Sparkles color="#FF9500" size={18} fill="#FF9500" />
-                <Text style={styles.aiTitle}>AI Insights</Text>
+                <Text style={styles.aiTitle}>{isManual === 'true' ? 'Notes' : 'AI Insights'}</Text>
               </View>
-              <Text style={styles.aiDescription}>{mealData.description}</Text>
+              {isEditing ? (
+                <TextInput
+                  style={[styles.aiDescription, styles.editableInput, { minHeight: 60 }]}
+                  value={editableMeal.description}
+                  onChangeText={(text) => setEditableMeal({ ...editableMeal, description: text })}
+                  multiline
+                  placeholder="Add a description..."
+                />
+              ) : (
+                <Text style={styles.aiDescription}>{editableMeal.description}</Text>
+              )}
               
-              {mealData.healthBenefits && (
+              {!isEditing && editableMeal.healthBenefits && (
                 <View style={styles.healthImpactBox}>
                   <Text style={styles.healthImpactTitle}>Health Impact</Text>
-                  <Text style={styles.healthImpactText}>{mealData.healthBenefits}</Text>
+                  <Text style={styles.healthImpactText}>{editableMeal.healthBenefits}</Text>
                 </View>
               )}
 
-              {mealData.antioxidants && (
+              {!isEditing && editableMeal.antioxidants && (
                 <View style={styles.antioxidantBadge}>
                   <Info color="#666" size={14} />
-                  <Text style={styles.antioxidantText}>{mealData.antioxidants}</Text>
+                  <Text style={styles.antioxidantText}>{editableMeal.antioxidants}</Text>
                 </View>
               )}
             </View>
@@ -273,7 +358,7 @@ export default function NutritionDetailScreen() {
             </View>
 
             <View style={styles.ingredientList}>
-              {mealData.ingredients.map((item, index) => (
+              {editableMeal.ingredients.map((item, index) => (
                 <View key={index} style={styles.ingredientItem}>
                   <View style={styles.ingredientMain}>
                     <View style={styles.dot} />
@@ -284,39 +369,45 @@ export default function NutritionDetailScreen() {
                   <Text style={styles.ingredientPortion}>{item.portion}</Text>
                 </View>
               ))}
+              {editableMeal.ingredients.length === 0 && (
+                <Text style={{ color: '#A0A0A0', fontStyle: 'italic', textAlign: 'center', padding: 10 }}>
+                  No ingredients listed.
+                </Text>
+              )}
             </View>
 
             {/* Action Buttons */}
             <View style={styles.footerActions}>
               <TouchableOpacity 
                 onPress={() => {
-                  // Only add if it's a new scan (no ID in params)
-                  if (!params.id) {
-                    const newMeal: Meal = {
-                      id: Date.now().toString(),
-                      mealName: mealData.mealName,
-                      calories: mealData.calories,
-                      protein: mealData.protein,
-                      carbs: mealData.carbs,
-                      fat: mealData.fat,
-                      antioxidants: mealData.antioxidants,
-                      description: mealData.description,
-                      healthBenefits: mealData.healthBenefits,
-                      ingredients: mealData.ingredients,
-                      imageUri: imageUri as string,
-                      timestamp: Date.now(),
-                    };
-                    addMeal(newMeal);
-                  }
+                  // Save the current editable state
+                  const finalMeal: Meal = {
+                    id: (params.id as string) || Date.now().toString(),
+                    mealName: editableMeal.mealName,
+                    calories: editableMeal.calories,
+                    protein: editableMeal.protein,
+                    carbs: editableMeal.carbs,
+                    fat: editableMeal.fat,
+                    antioxidants: editableMeal.antioxidants,
+                    description: editableMeal.description,
+                    healthBenefits: editableMeal.healthBenefits,
+                    ingredients: editableMeal.ingredients,
+                    imageUri: imageUri as string,
+                    timestamp: Date.now(),
+                  };
+                  
+                  // If it's an existing meal, we should ideally update it, 
+                  // but for now addMeal handles the history.
+                  addMeal(finalMeal);
                   router.replace('/(tabs)');
                 }}
                 style={styles.doneButton}>
-                <Text style={styles.doneButtonText}>Done</Text>
+                <Text style={styles.doneButtonText}>{isEditing ? 'Save & Done' : 'Done'}</Text>
               </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -400,6 +491,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#666',
+  },
+  manualBadge: {
+    backgroundColor: 'rgba(255, 149, 0, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  manualBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FF9500',
+    textTransform: 'uppercase',
+  },
+  editableInput: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#007AFF',
+    paddingVertical: 2,
   },
   titleRow: {
     flexDirection: 'row',

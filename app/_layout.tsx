@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -11,8 +12,48 @@ import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useThemeStore } from '@/store/themeStore';
 
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
 export default function RootLayout() {
   useFrameworkReady();
+  const router = useRouter();
+
+  useEffect(() => {
+    async function requestPermissions() {
+      if (Platform.OS === 'web') return;
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+    }
+    requestPermissions();
+
+    // Handle notifications when app is in foreground
+    const notificationListener = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Notification received in foreground:', notification);
+    });
+
+    // Handle notification taps
+    const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      if (data?.type === 'meal_reminder') {
+        router.push('/camera');
+      }
+    });
+
+    return () => {
+      notificationListener.remove();
+      responseListener.remove();
+    };
+  }, []);
 
   const [fontsLoaded] = useFonts({
     ...Ionicons.font,
@@ -96,6 +137,10 @@ export default function RootLayout() {
         <Stack.Screen name="nutrition-detail" options={{ presentation: 'modal' }} />
         <Stack.Screen name="compare" options={{ presentation: 'card' }} />
         <Stack.Screen name="profile-edit" options={{ presentation: 'card' }} />
+        <Stack.Screen name="notifications-settings" options={{ presentation: 'card' }} />
+        <Stack.Screen name="help-center" options={{ presentation: 'card' }} />
+        <Stack.Screen name="privacy-policy" options={{ presentation: 'card' }} />
+        <Stack.Screen name="about" options={{ presentation: 'card' }} />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style={isDarkMode ? 'light' : 'dark'} />

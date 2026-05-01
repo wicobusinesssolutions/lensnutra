@@ -1,8 +1,32 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Platform, Switch, Modal, Pressable } from 'react-native';
+import { 
+  View, 
+  Text, 
+  ScrollView, 
+  StyleSheet, 
+  TouchableOpacity, 
+  Platform, 
+  Switch, 
+  Modal, 
+  Pressable, 
+  Alert, 
+  TextInput 
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { User, Bell, Shield, CircleHelp, LogOut, ChevronRight, Apple, Moon, Target, Check } from 'lucide-react-native';
+import { 
+  User, 
+  Bell, 
+  Shield, 
+  CircleHelp, 
+  LogOut, 
+  ChevronRight, 
+  Apple, 
+  Moon, 
+  Target, 
+  Check,
+  Scale
+} from 'lucide-react-native';
 import { useThemeStore, getThemeColors } from '@/store/themeStore';
 import { useUserStore, UserGoal } from '@/store/userStore';
 
@@ -45,9 +69,9 @@ export default function SettingsScreen() {
   return (
     <ScrollView 
       style={[styles.container, { backgroundColor: colors.background }]} 
-      contentContainerStyle={{ paddingTop: insets.top + 10, paddingBottom: 120 }}>
+      contentContainerStyle={{ paddingBottom: 120 }}>
       
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <Text style={[styles.title, { color: colors.text }]}>Settings</Text>
       </View>
 
@@ -81,7 +105,21 @@ export default function SettingsScreen() {
             value={profile.goal} 
             onPress={() => setShowGoalPicker(true)}
           />
-          <SettingItem icon={Bell} label="Notifications" value="On" />
+          <SettingItem 
+            icon={Scale} 
+            label="Weight Unit" 
+            value={profile.weightUnit === 'lbs' ? 'Pounds (lbs)' : 'Kilograms (kg)'} 
+            onPress={() => {
+              const nextUnit = profile.weightUnit === 'kg' ? 'lbs' : 'kg';
+              updateProfile({ weightUnit: nextUnit });
+            }}
+          />
+          <SettingItem 
+            icon={Bell} 
+            label="Notifications"
+            value={profile.notificationsEnabled || profile.waterNotificationsEnabled ? 'Active' : 'Off'}
+            onPress={() => router.push('/notifications-settings')}
+          />
           <SettingItem icon={Moon} label="Dark Mode">
             <Switch 
               value={isDarkMode} 
@@ -93,12 +131,26 @@ export default function SettingsScreen() {
         </View>
       </View>
 
+
+
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Support & Legal</Text>
         <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
-          <SettingItem icon={CircleHelp} label="Help Center" />
-          <SettingItem icon={Shield} label="Privacy Policy" />
-          <SettingItem icon={Apple} label="About LensNutra AI" />
+          <SettingItem 
+            icon={CircleHelp} 
+            label="Help Center" 
+            onPress={() => router.push('/help-center')}
+          />
+          <SettingItem 
+            icon={Shield} 
+            label="Privacy Policy" 
+            onPress={() => router.push('/privacy-policy')}
+          />
+          <SettingItem 
+            icon={Apple} 
+            label="About LensNutra AI" 
+            onPress={() => router.push('/about')}
+          />
         </View>
       </View>
 
@@ -108,6 +160,8 @@ export default function SettingsScreen() {
       </TouchableOpacity>
 
       <Text style={[styles.version, { color: colors.textSecondary }]}>Version 1.0.0 (2025)</Text>
+
+
 
       <Modal
         visible={showGoalPicker}
@@ -131,6 +185,10 @@ export default function SettingsScreen() {
                 onPress={() => {
                   updateProfile({ goal });
                   setShowGoalPicker(false);
+                  Alert.alert(
+                    'Goal Updated', 
+                    `Your meal reminders have been updated to support ${goal}.`
+                  );
                 }}
               >
                 <Text style={[
@@ -160,9 +218,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '800',
-    letterSpacing: -0.5,
+    letterSpacing: -1,
   },
   profileCard: {
     flexDirection: 'row',
@@ -218,6 +276,56 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     paddingHorizontal: 24,
     marginBottom: 12,
+  },
+  subSectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingHorizontal: 24,
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  timeInput: {
+    height: 56,
+    borderWidth: 1,
+    borderRadius: 16,
+    textAlign: 'center',
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 16,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  saveButton: {
+    height: 50,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingRight: 24,
+  },
+  resetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 12,
+  },
+  resetText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   sectionContent: {
     marginHorizontal: 20,

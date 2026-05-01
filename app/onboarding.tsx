@@ -10,9 +10,12 @@ import {
   Platform,
   Dimensions,
   Animated,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
+import { SchedulableTriggerInputTypes } from 'expo-notifications';
 import { 
   ChevronRight, 
   ChevronLeft, 
@@ -23,7 +26,6 @@ import {
   Ruler,
   ArrowRight,
   Sparkles,
-  Apple,
   Camera,
   BarChart2
 } from 'lucide-react-native';
@@ -38,7 +40,7 @@ export default function OnboardingScreen() {
   const router = useRouter();
   const { isDarkMode } = useThemeStore();
   const colors = getThemeColors(isDarkMode);
-  const { updateProfile, completeOnboarding } = useUserStore();
+  const { updateProfile, completeOnboarding, initializeReminders } = useUserStore();
 
   const [step, setStep] = useState(0);
   const totalSteps = 6;
@@ -46,9 +48,9 @@ export default function OnboardingScreen() {
 
   // Form State
   const [gender, setGender] = useState('Male');
-  const [goal, setGoal] = useState<UserGoal>('Weight Loss');
-  const [weightKg, setWeightKg] = useState('70');
-  const [weightLbs, setWeightLbs] = useState('154.3');
+    const [goal, setGoal] = useState<UserGoal>('Weight Loss');
+    const [weightKg, setWeightKg] = useState('70');
+    const [weightLbs, setWeightLbs] = useState('154.3');
   const [heightCm, setHeightCm] = useState('170');
   const [heightFt, setHeightFt] = useState('5.6');
   const [name, setName] = useState('');
@@ -92,7 +94,8 @@ export default function OnboardingScreen() {
     if (step > 0) animateTransition(() => setStep(step - 1));
   };
 
-  const finishOnboarding = () => {
+  const finishOnboarding = async () => {
+    // Initialize profile
     updateProfile({
       name: name || 'User',
       email: email || 'user@example.com',
@@ -101,6 +104,56 @@ export default function OnboardingScreen() {
       goal,
       gender,
     });
+    
+    // Set default reminders
+    initializeReminders();
+    
+    // Request permissions and schedule initial notifications
+    if (Platform.OS !== 'web') {
+      try {
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status === 'granted') {
+          const state = useUserStore.getState();
+          // Use the initialized reminders from the store
+          const { mealReminders, waterReminders } = state.profile;
+          
+          await Notifications.cancelAllScheduledNotificationsAsync();
+          
+          // Schedule Meals with sound
+          for (const r of mealReminders) {
+            if (!r.active) continue;
+            const [h, m] = r.time.split(':').map(Number);
+            await Notifications.scheduleNotificationAsync({
+              content: { 
+                title: `${r.label} Time! 🥗`, 
+                body: `Stay on track with your ${goal} goal.`, 
+                sound: 'default',
+                priority: Notifications.AndroidPriority.HIGH,
+              },
+              trigger: { type: SchedulableTriggerInputTypes.DAILY, hour: h, minute: m },
+            });
+          }
+          
+          // Schedule Water with sound
+          for (const r of waterReminders) {
+            if (!r.active) continue;
+            const [h, m] = r.time.split(':').map(Number);
+            await Notifications.scheduleNotificationAsync({
+              content: { 
+                title: `Hydration Reminder 💧`, 
+                body: `Time to drink some water!`, 
+                sound: 'default',
+                priority: Notifications.AndroidPriority.HIGH,
+              },
+              trigger: { type: SchedulableTriggerInputTypes.DAILY, hour: h, minute: m },
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Onboarding notification setup failed', e);
+      }
+    }
+
     completeOnboarding();
     router.replace('/(tabs)');
   };
@@ -116,10 +169,17 @@ export default function OnboardingScreen() {
               {
                 backgroundColor: isDarkMode ? 'rgba(0, 122, 255, 0.15)' : 'rgba(0, 122, 255, 0.08)',
                 borderColor: isDarkMode ? 'rgba(0, 122, 255, 0.25)' : 'rgba(0, 122, 255, 0.15)',
+                width: 120,
+                height: 120,
+                borderRadius: 32,
               }
             ]}>
               <View style={styles.heroIconGlow}>
-                <Apple size={64} color={colors.primary} />
+                <Image 
+                  source={require('../assets/images/icon.png')} 
+                  style={{ width: 80, height: 80, borderRadius: 16 }} 
+                  resizeMode="contain"
+                />
               </View>
               <LinearGradient
                 colors={isDarkMode ? ['rgba(0,122,255,0.3)', 'transparent'] : ['rgba(0,122,255,0.15)', 'transparent']}

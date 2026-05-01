@@ -1,8 +1,9 @@
 import { Tabs, useRouter } from 'expo-router';
-import { Home, BarChart2, Settings, Plus } from 'lucide-react-native';
-import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { Home, BarChart2, Settings, Camera, Footprints } from 'lucide-react-native';
+import { View, TouchableOpacity, StyleSheet, Platform, Text } from 'react-native';
 import { useThemeStore, getThemeColors } from '@/store/themeStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function TabLayout() {
   const router = useRouter();
@@ -17,11 +18,11 @@ export default function TabLayout() {
           headerShown: false,
           tabBarStyle: {
             position: 'absolute',
-            bottom: insets.bottom > 0 ? insets.bottom - 10 : 0,
-            left: 20,
-            right: 20,
-            height: 72,
-            borderRadius: 24,
+            bottom: insets.bottom > 0 ? insets.bottom - 10 : 12,
+            left: 24,
+            right: 24,
+            height: 76,
+            borderRadius: 38,
             backgroundColor: isDarkMode ? 'rgba(28, 28, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)',
             borderWidth: 1,
             borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.50)',
@@ -70,6 +71,17 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
+          name="pedometer"
+          options={{
+            title: 'Activity',
+            tabBarIcon: ({ color, focused }) => (
+              <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
+                <Footprints color={color} size={22} strokeWidth={focused ? 2.5 : 2} />
+              </View>
+            ),
+          }}
+        />
+        <Tabs.Screen
           name="settings"
           options={{
             title: 'Settings',
@@ -82,22 +94,25 @@ export default function TabLayout() {
         />
       </Tabs>
 
-      {/* Floating Action Button — Glassmorphism */}
+      {/* Floating Action Button — Right Aligned Camera Icon Only */}
       <TouchableOpacity
         activeOpacity={0.85}
         onPress={() => router.push('/camera')}
         style={[
           styles.fab,
           {
-            bottom: insets.bottom > 0 ? insets.bottom + 78 : 88,
-            backgroundColor: isDarkMode ? 'rgba(0, 122, 255, 0.90)' : 'rgba(0, 122, 255, 0.95)',
-            shadowColor: '#007AFF',
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.3,
-            shadowRadius: 20,
+            bottom: insets.bottom > 0 ? insets.bottom + 85 : 95,
+            right: 24,
           }
         ]}>
-        <Plus color="#FFFFFF" size={28} strokeWidth={2.5} />
+        <LinearGradient
+          colors={['#007AFF', '#5AC8FA']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.fabGradient}
+        >
+          <Camera color="#FFFFFF" size={26} strokeWidth={2.5} />
+        </LinearGradient>
       </TouchableOpacity>
     </View>
   );
@@ -106,21 +121,27 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
-    alignSelf: 'center',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 12,
+    borderRadius: 28,
+    elevation: 8,
     zIndex: 100,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    overflow: 'hidden',
   },
-  iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  fabGradient: {
+      width: 56,
+      height: 56,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    iconContainer: {
+    height: 40,
+    width: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
