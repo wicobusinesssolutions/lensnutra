@@ -320,10 +320,16 @@ export default function HomeScreen() {
       <View style={[
         styles.overviewCard,
         {
-          backgroundColor: isDarkMode ? 'rgba(28, 28, 30, 0.72)' : 'rgba(255, 255, 255, 0.72)',
           borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.50)',
+          backgroundColor: 'transparent',
         }
       ]}>
+        <LinearGradient
+          colors={isDarkMode ? ['rgba(28, 28, 30, 0.9)', 'rgba(10, 10, 10, 0.9)'] : ['rgba(255, 255, 255, 0.95)', 'rgba(242, 242, 247, 0.95)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.modernGradientFill}
+        />
         <View style={styles.overviewMainContainer}>
           <OverviewRing 
             size={220} 
@@ -750,6 +756,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 24,
     elevation: 6,
+    overflow: 'hidden',
   },
   overviewMainContainer: {
     alignItems: 'center',

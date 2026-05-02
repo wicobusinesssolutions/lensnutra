@@ -229,7 +229,13 @@ export default function ProgressScreen() {
         </View>
 
         {/* Consistency Calendar */}
-        <View style={[styles.calendarCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[
+          styles.calendarCard, 
+          { 
+            backgroundColor: isDarkMode ? 'rgba(28, 28, 30, 0.95)' : colors.card, 
+            borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : colors.border 
+          }
+        ]}>
           <View style={styles.calendarHeader}>
             <View>
               <Text style={[styles.chartTitle, { color: colors.text }]}>Consistency</Text>
@@ -327,11 +333,13 @@ export default function ProgressScreen() {
 
         {/* Groundbreaking Weight Card */}
         <View style={styles.topRow}>
-          <View style={[styles.weightCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <LinearGradient
-              colors={[colors.primary + '15', 'transparent']}
-              style={styles.cardGradient}
-            />
+          <View style={[
+            styles.weightCard, 
+            { 
+              backgroundColor: isDarkMode ? 'rgba(28, 28, 30, 0.95)' : colors.card, 
+              borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : colors.border 
+            }
+          ]}>
             <View style={styles.weightHeader}>
               <View style={[styles.iconBg, { backgroundColor: colors.primary + '10' }]}>
                 <Scale color={colors.primary} size={20} />
@@ -379,7 +387,13 @@ export default function ProgressScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={[styles.streakCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[
+            styles.streakCard, 
+            { 
+              backgroundColor: isDarkMode ? 'rgba(28, 28, 30, 0.95)' : colors.card, 
+              borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : colors.border 
+            }
+          ]}>
             <Flame color={colors.accent} size={32} fill={profile.streak > 0 ? colors.accent : 'transparent'} />
             <Text style={[styles.streakValue, { color: colors.text }]}>{profile.streak}</Text>
             <Text style={[styles.streakLabel, { color: colors.accent }]}>Day Streak</Text>
@@ -387,7 +401,13 @@ export default function ProgressScreen() {
         </View>
 
         {/* Interactive Chart Card */}
-        <View style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[
+          styles.chartCard, 
+          { 
+            backgroundColor: isDarkMode ? 'rgba(28, 28, 30, 0.95)' : colors.card, 
+            borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : colors.border 
+          }
+        ]}>
           <View style={styles.chartHeader}>
             <View>
               <Text style={[styles.chartTitle, { color: colors.text }]}>Weight Analytics</Text>
@@ -414,8 +434,8 @@ export default function ProgressScreen() {
                 height={220}
                 chartConfig={{
                   backgroundColor: 'transparent',
-                  backgroundGradientFrom: colors.card,
-                  backgroundGradientTo: colors.card,
+                  backgroundGradientFrom: isDarkMode ? 'rgba(28, 28, 30, 0)' : colors.card,
+                  backgroundGradientTo: isDarkMode ? 'rgba(28, 28, 30, 0)' : colors.card,
                   decimalPlaces: 1,
                   color: (opacity = 1) => colors.primary,
                   labelColor: (opacity = 1) => colors.textSecondary,
@@ -645,7 +665,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(120, 120, 128, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
   },
   dayText: {
     fontSize: 13,
